@@ -1,0 +1,33 @@
+name: Keep All Spaces Alive
+on:
+  schedule:
+    # Run once every 47 hours (just before the 48h limit)
+    # This keeps traffic low to avoid bans
+    - cron: "0 0 */2 * *" 
+  workflow_dispatch: # Allows you to run it manually to test
+
+jobs:
+  ping_spaces:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake up Spaces
+        run: |
+          # List your URLs here
+          urls=(
+            "https://huggingface.co/spaces/kacapower/blogger-source-downloader"
+            "https://huggingface.co/spaces/kacapower/Blogger-Toolkit"
+            "https://huggingface.co/spaces/kacapower/repo-cloner-tool"
+            "https://huggingface.co/spaces/kacapower/backend-filehandler"
+            "https://huggingface.co/spaces/kacapower/videostream"
+            
+            
+          )
+
+          for url in "${urls[@]}"; do
+            echo "Pinging $url..."
+            curl -s $url > /dev/null
+            
+            # CRITICAL: Sleep for 10 seconds between requests
+            # This prevents Hugging Face from blocking you for "spamming"
+            sleep 10
+          done
