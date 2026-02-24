@@ -1,28 +1,54 @@
-name: Keep All Spaces Alive
+name: Wake Hugging Face Spaces
 
 on:
   schedule:
-    - cron: "0 0 * * *"
+    # Run every 30 minutes (UTC)
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 jobs:
-  ping_spaces:
+  wake_spaces:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-      - name: Wake up Spaces
+      - name: Ping Hugging Face Spaces
+        shell: bash
         run: |
-          urls=(
-            "https://huggingface.co/spaces/kacapower/blogger-source-downloader"
-            "https://huggingface.co/spaces/kacapower/Blogger-Toolkit"
-            "https://huggingface.co/spaces/kacapower/repo-cloner-tool"
-            "https://huggingface.co/spaces/kacapower/backend-filehandler"
-            "https://huggingface.co/spaces/kacapower/videostream"
+          set -e
+
+          SPACES=(
+            "https://kacapower-blogger-source-downloader.hf.space/"
+            "https://kacapower-blogger-toolkit.hf.space/"
+            "https://kacapower-repo-cloner-tool.hf.space/"
+            "https://kacapower-backend-filehandler.hf.space/"
+            "https://kacapower-videostream.hf.space/"
           )
 
-          for url in "${urls[@]}"; do
-            echo "Pinging $url..."
-            status=$(curl -s -o /dev/null -w "%{http_code}" "$url")
-            echo "Response Status: $status"
-            sleep 10
+          USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) GitHubActions/SpaceWake"
+
+          for SPACE in "${SPACES[@]}"; do
+            echo "----------------------------------------"
+            echo "Waking: $SPACE"
+
+            HTTP_CODE=$(curl -L \
+              -A "$USER_AGENT" \
+              --max-time 20 \
+              --silent \
+              --output /dev/null \
+              --write-out "%{http_code}" \
+              "$SPACE" || echo "000")
+
+            if [[ "$HTTP_CODE" == "200" ]]; then
+              echo "✅ Space responded (HTTP 200)"
+            elif [[ "$HTTP_CODE" == "503" ]]; then
+              echo "⏳ Space is waking up (503)"
+            else
+              echo "⚠️ Unexpected response: $HTTP_CODE"
+            fi
+
+            sleep 15
           done
+
+          echo "----------------------------------------"
+          echo "All spaces processed."
