@@ -1,0 +1,42 @@
+name: Wake Hugging Face Spaces
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  wake_spaces:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Wake Hugging Face Spaces
+        shell: bash
+        run: |
+          set -e
+
+          SPACES=(
+            "https://kacapower-blogger-source-downloader.hf.space/"
+            "https://kacapower-blogger-toolkit.hf.space/"
+            "https://kacapower-repo-cloner-tool.hf.space/"
+            "https://kacapower-backend-filehandler.hf.space/"
+            "https://kacapower-videostream.hf.space/"
+          )
+
+          USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) GitHubActions-HF-Waker"
+
+          for SPACE in "${SPACES[@]}"; do
+            echo "Waking: $SPACE"
+
+            HTTP_CODE=$(curl -L \
+              -A "$USER_AGENT" \
+              --max-time 20 \
+              --silent \
+              --output /dev/null \
+              --write-out "%{http_code}" \
+              "$SPACE" || echo "000")
+
+            echo "Status: $HTTP_CODE"
+            sleep 15
+          done
