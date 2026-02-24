@@ -1,13 +1,14 @@
 name: Keep All Spaces Alive
+
 on:
   schedule:
-    # Run once a day at midnight UTC to safely stay under the 48h limit
-    - cron: "0 0 * * *" 
-  workflow_dispatch: # Allows you to run it manually to test
+    - cron: "0 0 * * *"
+  workflow_dispatch:
 
 jobs:
   ping_spaces:
     runs-on: ubuntu-latest
+
     steps:
       - name: Wake up Spaces
         run: |
@@ -21,11 +22,7 @@ jobs:
 
           for url in "${urls[@]}"; do
             echo "Pinging $url..."
-            # -s hides progress bar, -o discards body, -w prints status code
             status=$(curl -s -o /dev/null -w "%{http_code}" "$url")
             echo "Response Status: $status"
-            
-            # CRITICAL: Sleep for 10 seconds between requests
-            # This prevents Hugging Face from blocking you for "spamming"
             sleep 10
           done
