@@ -23,6 +23,10 @@ jobs:
             "https://kacapower-repo-cloner-tool.hf.space/"
             "https://kacapower-backend-filehandler.hf.space/"
             "https://kacapower-videostream.hf.space/"
+            "https://huggingface.co/spaces/kacapower/fileconverter"
+            "https://huggingface.co/spaces/kacapower/temp-mail-api"
+            "https://huggingface.co/spaces/kacapower/simple"
+            
           )
 
           USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) GitHubActions-HF-Waker"
