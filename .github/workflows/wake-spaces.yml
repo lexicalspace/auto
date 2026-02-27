@@ -23,9 +23,9 @@ jobs:
             "https://kacapower-repo-cloner-tool.hf.space/"
             "https://kacapower-backend-filehandler.hf.space/"
             "https://kacapower-videostream.hf.space/"
-            "https://huggingface.co/spaces/kacapower/fileconverter"
-            "https://huggingface.co/spaces/kacapower/temp-mail-api"
-            "https://huggingface.co/spaces/kacapower/simple"
+            "https://kacapower-fileconverter.hf.space/"
+            "https://kacapower-temp-mail-api.hf.space/"
+            "https://kacapower-simple.hf.space/"
             
           )
 
