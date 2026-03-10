@@ -22,6 +22,7 @@ jobs:
             "https://kacapower-repo-cloner-tool.hf.space/"
             "https://kacapower-backend-filehandler.hf.space/"
             "https://kacapower-videostream.hf.space/"
+            "https://kacapower-portfolio.hf.space/"
           )
 
           USER_AGENT="Mozilla/5.0 (X11; Linux x86_64) GitHubActions-HF-Waker"
