@@ -19,14 +19,17 @@ jobs:
 
           SPACES=(
             "https://kacapower-blogger-source-downloader.hf.space/"
-            "https://kacapower-blogger-toolkit.hf.space/"
-            "https://kacapower-repo-cloner-tool.hf.space/"
+            "https://kacapower-collabrative-study-space.hf.space/"
+            "https://kacapower-shell-handler.hf.space/"
+            "https://kacapower-shell-worker-1.hf.space/"
+            "https://kacapower-shell-worker-2.hf.space/"
+            "https://kacapower-shell-worker-3.hf.space/"
+            "https://kacapower-shell-worker-4.hf.space/"
             "https://kacapower-backend-filehandler.hf.space/"
-            "https://kacapower-videostream.hf.space/"
-            "https://kacapower-fileconverter.hf.space/"
+            "https://kacapower-Docker.hf.space/"
+            "https://kacapower-static.hf.space/"
             "https://kacapower-temp-mail-api.hf.space/"
-            "https://kacapower-simple.hf.space/"
-            "https://kacapower-portfolio.hf.space/"
+            "https://kacapower-backend-music.hf.space/"
             
           )
 
