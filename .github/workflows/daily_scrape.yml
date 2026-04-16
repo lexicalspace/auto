@@ -17,7 +17,7 @@ jobs:
         with:
           python-version: '3.10'
       - name: Install dependencies
-        run: pip install pandas requests beautifulsoup4 datasets huggingface_hub pytz
+        run: pip install pandas datasets huggingface_hub pytz google-generativeai
       - name: Run Scraper Script
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }} # Ensure you add this in GitHub Repo Settings -> Secrets
