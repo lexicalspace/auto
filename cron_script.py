@@ -67,7 +67,7 @@ def scrape_site(url):
 def get_daily_qna():
     # Primary Source: Smartprix (Very reliable daily updates)
     print("Attempting Smartprix...")
-    data = scrape_site("https://www.smartprix.com/bytes/amazon-daily-quiz-answers/")
+    data = scrape_site("https://www.dealsmagnet.com/amazon-quiz-answers/")
     
     # Fallback Source: Dealnloot
     if not data or len(data) < 5: 
