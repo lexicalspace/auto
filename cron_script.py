@@ -1,86 +1,57 @@
 import os
-import requests
 import pandas as pd
-from bs4 import BeautifulSoup
 from datasets import load_dataset, Dataset
 from huggingface_hub import login
+import google.generativeai as genai
 from datetime import datetime
 import pytz
-import re
+import json
 
+# --- Config ---
 HF_TOKEN = os.environ.get("HF_TOKEN")
-DATASET_NAME = "kacapower/funzone-qna" 
+GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
+DATASET_NAME = "kacapower/funzone-qna"
 
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-}
-
-def extract_strict_qa(text_elements):
-    """
-    Strictly extracts exactly 5 questions.
-    Cleans up prefixes like "Question 1 of 5:" and "The answer is-".
-    """
-    qa_pairs = []
-    current_q = None
+def get_gemini_daily_qna(today_date):
+    """Calls Gemini API and forces it to return a clean JSON array."""
+    print(f"Calling Gemini API for {today_date} questions...")
     
-    for text in text_elements:
-        text = text.strip()
-        if not text:
-            continue
-            
-        # 1. Identify Questions: Must start with Q1, Question 1, etc., and contain a question mark
-        if re.match(r'^(Q(?:uestion)?\s*\d+)', text, re.IGNORECASE) and "?" in text:
-            # Strip the prefix (removes "Q1.", "Question 1:", "Question 1 of 5:")
-            clean_q = re.sub(r'^(Q(?:uestion)?\s*\d+(?:\s*of\s*\d+)?\s*[:.)-]?\s*)', '', text, flags=re.IGNORECASE)
-            current_q = clean_q.strip()
-            
-        # 2. Identify Answers: Must immediately follow a question and start with Ans, Answer, or The answer
-        elif current_q and re.match(r'^(Ans|The answer|Correct Answer)', text, re.IGNORECASE):
-            # Strip the prefix (removes "Answer:", "The answer is-", "Correct Answer- ✅")
-            clean_a = re.sub(r'^(Answer\s*[:.-]?\s*|Ans\s*[:.-]?\s*|The answer is\s*[-:]?\s*|Correct Answer\s*[-:]?\s*✅?\s*)', '', text, flags=re.IGNORECASE)
-            clean_a = clean_a.replace('✅', '').strip()
-            
-            # Avoid duplicate captures
-            if not any(item['question'] == current_q for item in qa_pairs):
-                qa_pairs.append({"question": current_q, "answer": clean_a})
-                
-            current_q = None # Reset for the next question
-            
-    # Return only the first 5 legitimate pairs (standard Amazon Quiz size)
-    return qa_pairs[:5]
-
-def scrape_site(url):
+    genai.configure(api_key=GEMINI_KEY)
+    
+    # Using Gemini 1.5 Flash. We enforce JSON output so the script doesn't break parsing text.
+    model = genai.GenerativeModel(
+        'gemini-1.5-flash',
+        generation_config={"response_mime_type": "application/json"}
+    )
+    
+    # The prompt explicitly anchors the LLM to today's date
+    prompt = f"""
+    Today is {today_date}. You must find the exact 5 Amazon Funzone Daily Quiz questions and answers for today.
+    Return ONLY a JSON array containing exactly 5 objects. 
+    Each object must have exactly two keys: "question" and "answer".
+    Clean up the text. Do not include "Q1" or "Answer:" prefixes.
+    """
+    
     try:
-        response = requests.get(url, headers=headers, timeout=15)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
+        response = model.generate_content(prompt)
+        # Parse the JSON string returned by Gemini into a Python list of dictionaries
+        qa_pairs = json.loads(response.text)
         
-        # Grab all text elements that might contain the Q&A
-        elements = [el.get_text(separator=' ', strip=True) for el in soup.find_all(['p', 'li', 'h3', 'div'])]
-        
-        qa_pairs = extract_strict_qa(elements)
-        return qa_pairs
+        # Verify we got a list back
+        if isinstance(qa_pairs, list) and len(qa_pairs) > 0:
+            return qa_pairs
+        else:
+            print("Gemini returned JSON, but it was not a valid list.")
+            return []
+            
     except Exception as e:
-        print(f"Failed to scrape {url}: {e}")
+        print(f"Gemini API Error: {e}")
         return []
 
-def get_daily_qna():
-    # Primary Source: Smartprix (Very reliable daily updates)
-    print("Attempting Smartprix...")
-    data = scrape_site("https://www.dealsmagnet.com/amazon-quiz-answers/")
-    
-    # Fallback Source: Dealnloot
-    if not data or len(data) < 5: 
-        print("Smartprix failed or incomplete. Trying Dealnloot fallback...")
-        data = scrape_site("https://www.dealnloot.com/amazon-quiz-answers/")
-        
-    return data
-
-# --- Main Logic ---
 def run_automation():
     login(token=HF_TOKEN)
     
-    # Load existing database safely
+    # 1. Load existing database safely
     try:
         df = load_dataset(DATASET_NAME, split="train").to_pandas()
         df.columns = [str(c).lower() for c in df.columns]
@@ -89,30 +60,37 @@ def run_automation():
     except Exception:
         df = pd.DataFrame(columns=["date", "question", "answer"])
 
-    # Scrape Today's Q&A
+    # 2. Setup Today's Date
     today_date = datetime.now(pytz.timezone('Asia/Kolkata')).strftime("%Y-%m-%d")
-    scraped_data = get_daily_qna()
+    
+    # 3. Fetch from Gemini
+    scraped_data = get_gemini_daily_qna(today_date)
 
     if not scraped_data:
-        print("Error: Both scrapers failed to find data today.")
+        print("Error: Failed to retrieve valid Q&A from Gemini API today.")
         return
 
-    # Deduplicate and Prepare New Entries
+    # 4. Deduplicate and Prepare New Entries
     new_entries = []
     for item in scraped_data:
-        q = item["question"]
-        a = item["answer"]
+        # Failsafe in case Gemini hallucinates keys
+        q = item.get("question", "").strip()
+        a = item.get("answer", "").strip()
+        
+        if not q or not a:
+            continue
+            
         # Only add if the exact question isn't already saved today
         if df.empty or not ((df['question'] == q) & (df['date'] == today_date)).any():
             new_entries.append({"date": today_date, "question": q, "answer": a})
 
-    # Push to hf Dataset
+    # 5. Push to HF Dataset
     if new_entries:
         new_df = pd.DataFrame(new_entries)
         updated_df = pd.concat([df, new_df], ignore_index=True)
         updated_ds = Dataset.from_pandas(updated_df)
         updated_ds.push_to_hub(DATASET_NAME)
-        print(f"Successfully pushed {len(new_entries)} clean questions to hf dataset.")
+        print(f"Successfully pushed {len(new_entries)} LLM-generated questions to hf dataset.")
     else:
         print("No new questions found. Dataset is already up to date.")
 
