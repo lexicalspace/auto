@@ -37,12 +37,13 @@ def get_gemini_daily_qna(today_date):
         Clean up the text. Do not include "Q1" or "Answer:" prefixes.
         """
         
-        # New SDK Content Generation Call
+        # New SDK Content Generation Call with Google Search Enabled
         response = client.models.generate_content(
-            model='gemini-2.5-flash', # Upgraded to the standard model endpoint
+            model='gemini-2.5-flash',
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
+                tools=[{"googleSearch": {}}] # <-- This gives the API live internet access
             )
         )
         
