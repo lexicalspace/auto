@@ -23,33 +23,34 @@ DATASET_NAME = "kacapower/funzone-qna"
 def get_gemini_daily_qna(today_date):
     """
     Calls Gemini API using the new google-genai SDK.
+    Uses Search Grounding but relies on prompt engineering for JSON output 
+    to bypass the API's Tool + JSON conflict.
     """
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] Requesting {today_date} Q&A from Gemini...")
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Requesting {today_date} Q&A from Gemini with Search...")
     
     try:
-        # New SDK Client Initialization
         client = genai.Client(api_key=GEMINI_KEY)
         
         prompt = f"""
-        Today is {today_date}. You must find the exact 5 Amazon Funzone Daily Quiz questions and answers for today.
-        Return ONLY a JSON array containing exactly 5 objects. 
+        Today is {today_date}. Use Google Search to find the exact 5 Amazon Funzone Daily Quiz questions and answers for today.
+        You MUST format your entire response as a raw JSON array containing exactly 5 objects. 
         Each object must have exactly two keys: "question" and "answer".
+        Do not include any greeting, explanation, or text outside of the JSON array.
         Clean up the text. Do not include "Q1" or "Answer:" prefixes.
         """
         
-        # New SDK Content Generation Call with Google Search Enabled
+        # Call with Search enabled, but standard text output
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt,
             config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                tools=[{"googleSearch": {}}] # <-- This gives the API live internet access
+                tools=[{"googleSearch": {}}] # Search is ON, JSON strict mode is OFF
             )
         )
         
         raw_text = response.text.strip()
         
-        # Bulletproof Markdown Stripper
+        # Bulletproof Markdown Stripper (crucial now that strict JSON mode is off)
         if raw_text.startswith("```json"):
             raw_text = raw_text[7:]
         elif raw_text.startswith("```"):
