@@ -1,6 +1,6 @@
 """
 Amazon Funzone Daily Fetcher
-Backend Automation Engine powered by Gemini 1.5 Flash
+Backend Automation Engine powered by Gemini Flash (New SDK)
 """
 
 import os
@@ -8,28 +8,27 @@ import json
 import pandas as pd
 from datasets import load_dataset, Dataset
 from huggingface_hub import login
-import google.generativeai as genai
 from datetime import datetime
 import pytz
+
+# --- NEW SDK IMPORTS ---
+from google import genai
+from google.genai import types
 
 # --- Environment Setup ---
 HF_TOKEN = os.environ.get("HF_TOKEN")
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY")
-DATASET_NAME = "kacapower/funzone-qna"  # Ensure this matches your HF path
+DATASET_NAME = "kacapower/funzone-qna" 
 
 def get_gemini_daily_qna(today_date):
     """
-    Calls Gemini API, forces JSON output, and uses robust markdown 
-    stripping to ensure the data is always readable by Python.
+    Calls Gemini API using the new google-genai SDK.
     """
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Requesting {today_date} Q&A from Gemini...")
     
     try:
-        genai.configure(api_key=GEMINI_KEY)
-        model = genai.GenerativeModel(
-            'gemini-1.5-flash',
-            generation_config={"response_mime_type": "application/json"}
-        )
+        # New SDK Client Initialization
+        client = genai.Client(api_key=GEMINI_KEY)
         
         prompt = f"""
         Today is {today_date}. You must find the exact 5 Amazon Funzone Daily Quiz questions and answers for today.
@@ -38,10 +37,18 @@ def get_gemini_daily_qna(today_date):
         Clean up the text. Do not include "Q1" or "Answer:" prefixes.
         """
         
-        response = model.generate_content(prompt)
+        # New SDK Content Generation Call
+        response = client.models.generate_content(
+            model='gemini-2.5-flash', # Upgraded to the standard model endpoint
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+            )
+        )
+        
         raw_text = response.text.strip()
         
-        # Bulletproof Markdown Stripper (fixes LLM JSON formatting quirks)
+        # Bulletproof Markdown Stripper
         if raw_text.startswith("```json"):
             raw_text = raw_text[7:]
         elif raw_text.startswith("```"):
@@ -74,7 +81,7 @@ def run_automation():
     login(token=HF_TOKEN)
     today_date = datetime.now(pytz.timezone('Asia/Kolkata')).strftime("%Y-%m-%d")
     
-    # 1. Load the existing historical dataset from HF Hub
+    # 1. Load the existing historical dataset
     try:
         df = load_dataset(DATASET_NAME, split="train").to_pandas()
         df.columns = [str(c).lower() for c in df.columns]
@@ -85,13 +92,13 @@ def run_automation():
         print("ℹ️ No existing dataset found. Creating a new one.")
         df = pd.DataFrame(columns=["date", "question", "answer"])
 
-    # 2. Fetch today's answers via Gemini
+    # 2. Fetch today's answers
     scraped_data = get_gemini_daily_qna(today_date)
     if not scraped_data:
         print("❌ Sync aborted: No data retrieved.")
         return
 
-    # 3. Deduplicate (Prevent saving the exact same question twice on the same day)
+    # 3. Deduplicate
     new_entries = []
     for item in scraped_data:
         q = item.get("question", "").strip()
@@ -108,12 +115,10 @@ def run_automation():
         new_df = pd.DataFrame(new_entries)
         updated_df = pd.concat([df, new_df], ignore_index=True)
         
-        # Optional: Save a physical local backup in the GitHub Runner
         backup_filename = f"backup_{today_date}.json"
         updated_df.to_json(backup_filename, orient="records", indent=4)
         print(f"[{datetime.now().strftime('%H:%M:%S')}] 💾 Local backup saved as {backup_filename}")
         
-        # Push to Hugging Face
         updated_ds = Dataset.from_pandas(updated_df)
         updated_ds.push_to_hub(DATASET_NAME)
         print(f"[{datetime.now().strftime('%H:%M:%S')}] 🚀 SUCCESS: {len(new_entries)} new entries pushed to Hugging Face!")
