@@ -1,4 +1,6 @@
 name: Daily Funzone Q&A Scraper
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 on:
   schedule:
     # 22:30 UTC is exactly 4:00 AM IST
