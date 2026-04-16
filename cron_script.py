@@ -73,9 +73,16 @@ def get_daily_qna():
 def run_automation():
     login(token=HF_TOKEN)
     
-    # 1. Load existing database
+    # 1. Load existing database safely
     try:
         df = load_dataset(DATASET_NAME, split="train").to_pandas()
+        # Force column names to lowercase to prevent KeyErrors (e.g., "Question" -> "question")
+        df.columns = [str(c).lower() for c in df.columns]
+        
+        # If the dataset is somehow corrupted or missing core columns, reset it
+        if 'question' not in df.columns or 'date' not in df.columns:
+            print("Warning: Dataset columns mismatched. Resetting dataframe structure.")
+            df = pd.DataFrame(columns=["date", "question", "answer"])
     except Exception:
         df = pd.DataFrame(columns=["date", "question", "answer"])
 
