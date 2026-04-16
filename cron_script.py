@@ -65,7 +65,7 @@ def get_daily_qna():
     # Fallback Source
     if not data or len(data) < 4: 
         print("Buyhatke failed or returned too few results. Trying Dealsmagnet fallback...")
-        data = scrape_site("https://www.dealsmagnet.com/amazon-quiz-answers")
+        data = scrape_site("https://www.freejobalert.com/article/amazon-quiz-answers-today")
         
     return data
 
