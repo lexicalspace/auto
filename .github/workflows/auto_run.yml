@@ -22,14 +22,11 @@ jobs:
           SPACES=(
             "https://kacapower-blogger-source-downloader.hf.space/"
             "https://kacapower-collabrative-study-space.hf.space/"
-            "https://kacapower-shell-handler.hf.space/"
-            "https://kacapower-shell-worker-1.hf.space/"
-            "https://kacapower-shell-worker-2.hf.space/"
-            "https://kacapower-shell-worker-3.hf.space/"
-            "https://kacapower-shell-worker-4.hf.space/"
+            
             "https://kacapower-backend-filehandler.hf.space/"
             "https://kacapower-Docker.hf.space/"
-            "https://kacapower-static.hf.space/"
+            "https://kacapower-a1-frnt.space/"
+            "https://kacapower-a1-bck.space/"
             "https://kacapower-temp-mail-api.hf.space/"
             "https://kacapower-backend-music.hf.space/" # Your private space added here
           )
