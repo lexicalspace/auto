@@ -25,8 +25,8 @@ jobs:
             
             "https://kacapower-backend-filehandler.hf.space/"
             "https://kacapower-Docker.hf.space/"
-            "https://kacapower-a1-frnt.space/"
-            "https://kacapower-a1-bck.space/"
+            "https://kacapower-a1-frnt.hf.space/"
+            "https://kacapower-a1-bck.hf.space/"
             "https://kacapower-temp-mail-api.hf.space/"
             "https://kacapower-backend-music.hf.space/" # Your private space added here
           )
