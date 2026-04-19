@@ -4,8 +4,8 @@ env:
 
 on:
   schedule:
-    - cron: '30 6 * * *'
-  workflow_dispatch: 
+    - cron: '30 1 * * *'
+  workflow_dispatch:
 
 jobs:
   gemini-sync-job:
