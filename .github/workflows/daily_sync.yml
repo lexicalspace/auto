@@ -1,0 +1,61 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Lexical Space — Daily Sync Workflow
+# Runs sync.py every day at 3:00 AM IST (= 21:30 UTC previous day).
+#
+# Required repository secrets (Settings → Secrets → Actions):
+#   HF_TOKEN          → Hugging Face write-access token
+#   HF_DATASET_REPO   → e.g. "youruser/lexicalspace-db"
+#
+# GITHUB_TOKEN is injected automatically by GitHub Actions — no setup needed.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Lexical Space Daily Sync
+
+on:
+  schedule:
+    - cron: "30 21 * * *"   # 21:30 UTC = 3:00 AM IST
+  workflow_dispatch:          # allows manual "Run workflow" button in GitHub UI
+
+jobs:
+  sync:
+    name: Refresh HF Dataset DB
+    runs-on: ubuntu-latest
+    timeout-minutes: 15       # kill if it hangs (rate-limit edge case)
+
+    permissions:
+      contents: read          # GITHUB_TOKEN only needs read for API calls
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-sync-v1
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: pip install --quiet requests huggingface_hub
+
+      - name: Run daily sync
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_DATASET_REPO: ${{ secrets.HF_DATASET_REPO }}
+        run: python sync.py
+
+      - name: Report success
+        if: success()
+        run: echo "✅ Daily sync completed successfully."
+
+      - name: Report failure
+        if: failure()
+        run: echo "❌ Daily sync FAILED. Check logs above."
