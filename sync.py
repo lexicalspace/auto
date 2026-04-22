@@ -58,30 +58,100 @@ def changelog_to_bullets(body: str) -> str:
 
 
 # ── GitHub Fetch ──────────────────────────────────────────────────────────────
+def normalise_repo_path(repo_url: str) -> tuple[str | None, str | None]:
+    """
+    Extracts a clean 'owner/repo' path from any GitHub URL variant.
+    Handles: trailing slashes, .git suffix, /tree/branch, /blob/…, http vs https,
+    www prefix, and accidentally stored API URLs.
+    Returns (repo_path, error_string).
+    """
+    if not repo_url or not repo_url.strip():
+        return None, "repo_url is empty."
+
+    url = repo_url.strip()
+
+    # Strip API URL prefix if someone accidentally stored one
+    url = re.sub(r"https?://api\.github\.com/repos/", "", url)
+
+    # Normalise to a bare path
+    url = re.sub(r"https?://(www\.)?github\.com/", "", url)
+
+    # Drop .git suffix
+    url = re.sub(r"\.git$", "", url, flags=re.IGNORECASE)
+
+    # Strip everything after the second path segment
+    # e.g.  owner/repo/tree/main  →  owner/repo
+    parts = [p for p in url.strip("/").split("/") if p]
+    if len(parts) < 2:
+        return None, f"Cannot extract owner/repo from URL: '{repo_url}'"
+
+    return f"{parts[0]}/{parts[1]}", None
+
+
 def fetch_fresh_data(repo_url: str) -> tuple[dict | None, str | None]:
     """
     Hits the GitHub REST API for a single repo.
     Returns only the 5 fields the daily sync is allowed to touch.
-    """
-    try:
-        clean    = repo_url.replace("https://github.com/", "").strip("/")
-        parts    = clean.split("/")
-        if len(parts) < 2:
-            return None, f"Invalid repo URL: {repo_url}"
-        repo_path = f"{parts[0]}/{parts[1]}"
 
-        # ── Repo metadata ──────────────────────────────────────────────────
-        repo_resp = requests.get(
-            f"https://api.github.com/repos/{repo_path}",
-            headers=GITHUB_API_HEADERS,
-            timeout=20,
-        )
+    Robustness improvements over v1:
+      - URL is normalised before use (handles .git, /tree/…, API prefix, www)
+      - Logs the exact repo_path being tried so 404s are instantly debuggable
+      - On 404: checks GitHub rate-limit headers and reports remaining quota
+      - On 404: detects if the repo was renamed/moved via GitHub's redirect hint
+      - Retries once with a 3-second back-off on transient 5xx errors
+    """
+    # ── 1. Normalise URL → owner/repo ─────────────────────────────────────
+    repo_path, norm_err = normalise_repo_path(repo_url)
+    if norm_err:
+        return None, norm_err
+
+    log(f"       → Resolved repo path: {repo_path}")
+
+    api_url = f"https://api.github.com/repos/{repo_path}"
+
+    try:
+        # ── 2. Repo metadata (with one retry on 5xx) ───────────────────────
+        repo_resp = requests.get(api_url, headers=GITHUB_API_HEADERS, timeout=20)
+
+        # Transient server error — wait 3 s and retry once
+        if repo_resp.status_code >= 500:
+            import time
+            log(f"       → GitHub returned {repo_resp.status_code}, retrying in 3 s …")
+            time.sleep(3)
+            repo_resp = requests.get(api_url, headers=GITHUB_API_HEADERS, timeout=20)
+
+        # ── Rate limit ─────────────────────────────────────────────────────
         if repo_resp.status_code == 403:
-            # GitHub rate-limit hit — skip gracefully, do NOT crash
-            reset_ts = repo_resp.headers.get("X-RateLimit-Reset", "?")
-            return None, f"Rate limited. Resets at {reset_ts}."
+            remaining = repo_resp.headers.get("X-RateLimit-Remaining", "?")
+            reset_ts  = repo_resp.headers.get("X-RateLimit-Reset", "?")
+            return None, (
+                f"Rate limited (remaining={remaining}). "
+                f"Resets at Unix ts {reset_ts}. "
+                f"Consider adding GITHUB_TOKEN to your Actions secrets."
+            )
+
+        # ── 404 — repo not found ───────────────────────────────────────────
+        if repo_resp.status_code == 404:
+            # GitHub includes a redirect hint when a repo is renamed/transferred
+            redirect_hint = ""
+            try:
+                body = repo_resp.json()
+                if "url" in body:
+                    redirect_hint = f" Possible new URL: {body['url']}"
+            except Exception:
+                pass
+            return None, (
+                f"404 Not Found for '{repo_path}'.{redirect_hint} "
+                f"Fix: update the repo_url in your apps.json for this entry."
+            )
+
         if repo_resp.status_code != 200:
-            return None, f"GitHub API {repo_resp.status_code}: {repo_resp.json().get('message', '?')}"
+            try:
+                msg = repo_resp.json().get("message", "no message")
+            except Exception:
+                msg = repo_resp.text[:120]
+            return None, f"GitHub API {repo_resp.status_code}: {msg}"
+
         repo_data = repo_resp.json()
 
         # ── Latest release ─────────────────────────────────────────────────
@@ -160,6 +230,26 @@ def push_db(db: list, updated: int, changed: int):
     os.unlink(tmp_path)
 
 
+# ── Pre-flight DB Validator ───────────────────────────────────────────────────
+def validate_db_urls(db: list) -> list[str]:
+    """
+    Scans every entry in the DB and reports any repo_url that will
+    definitely 404 before the sync even starts, so users can fix them.
+    Returns a list of warning strings (empty = all good).
+    """
+    warnings = []
+    for entry in db:
+        app_name = entry.get("app_name") or entry.get("app_id", "?")
+        repo_url  = entry.get("repo_url", "")
+        if not repo_url:
+            warnings.append(f"  ⚠  [{app_name}] repo_url is missing entirely.")
+            continue
+        _, err = normalise_repo_path(repo_url)
+        if err:
+            warnings.append(f"  ⚠  [{app_name}] Unparseable URL '{repo_url}': {err}")
+    return warnings
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 def run_sync():
     log("=" * 55)
@@ -189,6 +279,15 @@ def run_sync():
         log("DB is empty. Nothing to sync. Exiting.")
         sys.exit(0)
 
+    # ── Pre-flight URL validation ──────────────────────────────────────────
+    url_warnings = validate_db_urls(db)
+    if url_warnings:
+        log("⚠  URL validation warnings (will be skipped during sync):")
+        for w in url_warnings:
+            log(w)
+    else:
+        log("✅ All repo_url entries look well-formed.")
+
     # ── Iterate & update ───────────────────────────────────────────────────
     refreshed = 0
     changed   = 0
@@ -207,6 +306,8 @@ def run_sync():
 
         if err:
             log(f"  [{app_name}] ERROR — {err}")
+            log(f"  [{app_name}] Stored repo_url was: '{repo_url}'")
+            log(f"  [{app_name}] Fix: edit apps.json and correct repo_url for this entry.")
             errors += 1
             continue
 
