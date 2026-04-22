@@ -22,7 +22,7 @@ jobs:
           SPACES=(
             "https://kacapower-blogger-source-downloader.hf.space/"
             "https://kacapower-collabrative-study-space.hf.space/"
-            
+            "https://kacapower-agent-store.hf.space/"
             "https://kacapower-backend-filehandler.hf.space/"
             "https://kacapower-Docker.hf.space/"
             "https://kacapower-a1-frnt.hf.space/"
